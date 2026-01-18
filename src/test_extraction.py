@@ -78,23 +78,21 @@ def run_pass1(
     start_time = time.time()
 
     try:
-        result = app.scrape_url(
+        result = app.scrape(
             url,
-            params={
-                "formats": ["markdown", "html"],
-                "waitFor": config.capture_wait_for,
-                "timeout": config.capture_timeout,
-                "onlyMainContent": config.capture_only_main_content,
-            },
+            formats=["markdown", "html"],
+            wait_for=config.capture_wait_for,
+            timeout=config.capture_timeout,
+            only_main_content=config.capture_only_main_content,
         )
 
         elapsed = time.time() - start_time
 
         return {
             "success": True,
-            "markdown": result.get("markdown", ""),
-            "html": result.get("html", ""),
-            "metadata": result.get("metadata", {}),
+            "markdown": getattr(result, "markdown", "") or "",
+            "html": getattr(result, "html", "") or "",
+            "metadata": getattr(result, "metadata", {}) or {},
             "error": None,
         }, elapsed
 
@@ -127,20 +125,20 @@ def run_pass2(
     start_time = time.time()
 
     try:
-        result = app.scrape_url(
-            url,
-            params={
-                "formats": ["extract"],
-                "extract": {
-                    "schema": schema,
-                    "prompt": prompt,
-                },
-                "timeout": config.extraction_timeout,
-            },
+        result = app.extract(
+            urls=[url],
+            schema=schema,
+            prompt=prompt,
+            timeout=config.extraction_timeout,
         )
 
         elapsed = time.time() - start_time
-        extracted = result.get("extract", {})
+        # Extract returns a list of results, get first one
+        extracted = {}
+        if hasattr(result, "data") and result.data:
+            extracted = result.data if isinstance(result.data, dict) else {}
+        elif isinstance(result, dict):
+            extracted = result.get("data", {})
 
         return {
             "success": True,
@@ -188,19 +186,18 @@ Return the data as a JSON object with these fields:
     start_time = time.time()
 
     try:
-        result = app.scrape_url(
-            url,
-            params={
-                "formats": ["extract"],
-                "extract": {
-                    "prompt": prompt,
-                },
-                "timeout": config.extraction_timeout,
-            },
+        result = app.extract(
+            urls=[url],
+            prompt=prompt,
+            timeout=config.extraction_timeout,
         )
 
         elapsed = time.time() - start_time
-        extracted = result.get("extract", {})
+        extracted = {}
+        if hasattr(result, "data") and result.data:
+            extracted = result.data if isinstance(result.data, dict) else {}
+        elif isinstance(result, dict):
+            extracted = result.get("data", {})
 
         return {
             "success": True,

@@ -37,11 +37,12 @@ def test_api_connectivity(app: FirecrawlApp) -> bool:
     console.print("[cyan]Testing API connectivity...[/cyan]")
     try:
         # Try a simple scrape to verify API key works
-        result = app.scrape_url(
+        result = app.scrape(
             "https://example.com",
-            params={"formats": ["markdown"], "timeout": 10000},
+            formats=["markdown"],
+            timeout=10000,
         )
-        if result and "markdown" in result:
+        if result and hasattr(result, "markdown"):
             console.print("[green]API connectivity: OK[/green]")
             return True
         else:
@@ -59,27 +60,25 @@ def run_pass1_capture(app: FirecrawlApp, url: str, config: Any) -> Dict[str, Any
 
     start_time = time.time()
 
-    result = app.scrape_url(
+    result = app.scrape(
         url,
-        params={
-            "formats": ["markdown", "html"],
-            "waitFor": config.capture_wait_for,
-            "timeout": config.capture_timeout,
-            "onlyMainContent": config.capture_only_main_content,
-        },
+        formats=["markdown", "html"],
+        wait_for=config.capture_wait_for,
+        timeout=config.capture_timeout,
+        only_main_content=config.capture_only_main_content,
     )
 
     elapsed = time.time() - start_time
 
     # Extract content
-    markdown_content = result.get("markdown", "")
-    html_content = result.get("html", "")
-    metadata = result.get("metadata", {})
+    markdown_content = getattr(result, "markdown", "") or ""
+    html_content = getattr(result, "html", "") or ""
+    metadata = getattr(result, "metadata", {}) or {}
 
     console.print(f"  [green]Capture completed in {elapsed:.1f}s[/green]")
     console.print(f"  Markdown length: {len(markdown_content):,} chars")
     console.print(f"  HTML length: {len(html_content):,} chars")
-    console.print(f"  Title: {metadata.get('title', 'N/A')}")
+    console.print(f"  Title: {metadata.get('title', 'N/A') if isinstance(metadata, dict) else 'N/A'}")
 
     return {
         "markdown": markdown_content,
@@ -103,21 +102,21 @@ def run_pass2_extraction(
     start_time = time.time()
 
     try:
-        result = app.scrape_url(
-            url,
-            params={
-                "formats": ["extract"],
-                "extract": {
-                    "schema": schema,
-                    "prompt": prompt,
-                },
-                "timeout": config.extraction_timeout,
-            },
+        result = app.extract(
+            urls=[url],
+            schema=schema,
+            prompt=prompt,
+            timeout=config.extraction_timeout,
         )
 
         elapsed = time.time() - start_time
 
-        extracted_data = result.get("extract", {})
+        # Extract data from result
+        extracted_data = {}
+        if hasattr(result, "data") and result.data:
+            extracted_data = result.data if isinstance(result.data, dict) else {}
+        elif isinstance(result, dict):
+            extracted_data = result.get("data", {})
 
         console.print(f"  [green]Extraction completed in {elapsed:.1f}s[/green]")
 

@@ -7,7 +7,14 @@ for the extraction pipeline as specified in the PRD.
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
+
+from dotenv import load_dotenv
+
+# Load .env file from project root
+_env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(_env_path)
 
 
 @dataclass

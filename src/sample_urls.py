@@ -60,10 +60,10 @@ TEST_URLS: Dict[str, List[TestURL]] = {
             expected_features=["tiered_pricing", "multi_dog_discount"],
         ),
         TestURL(
-            url="https://honeybottomkennels.co.uk/boarding-prices/",
+            url="https://honeybottomkennels.co.uk/boarding-prices-2026/",
             business_type="dog_kennel",
             complexity="medium",
-            notes="Single night and longer stay discounts",
+            notes="Single night and longer stay discounts, 2026 prices",
             expected_features=["seasonal_pricing", "long_stay_discount"],
         ),
         TestURL(

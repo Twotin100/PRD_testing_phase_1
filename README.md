@@ -280,6 +280,165 @@ ORDER BY bp.price_inc_vat;
 
 ---
 
+## Firecrawl API Credit Analysis
+
+### Credit Usage Per URL (from Activity Logs)
+
+Each URL requires two API calls:
+
+| Operation | Credits | Purpose |
+|-----------|---------|---------|
+| `/scrape` | 1 | Capture page as markdown/HTML |
+| `/extract` | 43-90 | LLM structured extraction |
+
+**Extract credits vary by content complexity:**
+
+| URL | Scrape | Extract | Total |
+|-----|--------|---------|-------|
+| harkersbarkers.co.uk | 1 | 43 | 44 |
+| whitehouse-kennels.co.uk | 1 | 73 | 74 |
+| ivykennels.co.uk | 1 | 52 | 53 |
+| honeybottomkennels.co.uk | 1 | 50 | 51 |
+| greenlanefarmboardingkennels.co.uk | 1 | 90 | 91 |
+| meadowviewboardingkennels.co.uk | 1 | 62 | 63 |
+
+**Average: ~63 credits per page**
+
+### Full Site Extraction Scope
+
+For comprehensive data extraction, we need to crawl **multiple pages per business**:
+
+| Page Type | Data Extracted |
+|-----------|----------------|
+| **Pricing page** | Prices, rates, packages, size tiers |
+| **Services/About** | Services offered, amenities, facilities |
+| **Contact page** | Phone, email, address, location |
+| **FAQ/Terms** | Vaccination requirements, cancellation policy, deposits |
+| **Homepage** | Opening hours, overview, special offers |
+
+**Estimated 4-5 pages per business**
+
+### Credit Estimate for Full Extraction
+
+| Scenario | Businesses | Pages/Business | Total Pages | Credits/Page | Total Credits |
+|----------|------------|----------------|-------------|--------------|---------------|
+| Minimum | 40 | 4 | 160 | 63 | **10,080** |
+| Expected | 40 | 5 | 200 | 63 | **12,600** |
+| With buffer | 40 | 5 | 200 | 75 | **15,000** |
+
+### Firecrawl Plan Recommendation
+
+| Plan | Credits/Month | Price | Fits Our Needs? |
+|------|---------------|-------|-----------------|
+| Free | 500 | £0 | ❌ Only ~8 pages |
+| Hobby | 3,000 | £12 | ❌ Only ~48 pages |
+| **Standard** | **100,000** | **£62** | ✅ **Recommended** |
+| Growth | 500,000 | £249 | ❌ Overkill |
+
+**Recommendation: Standard Plan (£62/month)**
+- 100,000 credits provides 6x headroom over our estimate
+- Allows for re-runs, testing, and schema iterations
+- 50 concurrent requests enables faster crawling
+- Room for expanding to more businesses
+
+### Cost Optimization Strategies
+
+1. **Crawl efficiently** - Use Firecrawl's `/crawl` endpoint to capture multiple pages in one call
+2. **Cache markdown** - Store Pass 1 results to avoid re-scraping
+3. **Batch extractions** - Combine content from multiple pages before extraction
+4. **Local LLM fallback** - Use local models for simpler extractions
+
+---
+
+## Multi-Page Extraction Strategy
+
+### Proposed Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PER-BUSINESS EXTRACTION FLOW                  │
+└─────────────────────────────────────────────────────────────────┘
+
+  Business URL (e.g., greenlanefarm.co.uk)
+           │
+           ▼
+  ┌─────────────────┐
+  │  1. Site Crawl  │  Firecrawl /crawl endpoint
+  │  (5 pages max)  │  ~5 credits (scrape only)
+  └────────┬────────┘
+           │
+           ▼
+  ┌─────────────────┐
+  │ 2. Page Filter  │  Identify pricing, contact, FAQ pages
+  │                 │  by URL patterns and content
+  └────────┬────────┘
+           │
+           ▼
+  ┌─────────────────┐
+  │ 3. Content Merge│  Combine relevant page content
+  │                 │  into single extraction context
+  └────────┬────────┘
+           │
+           ▼
+  ┌─────────────────┐
+  │ 4. Extract Once │  Single /extract call per business
+  │                 │  ~60-90 credits
+  └────────┬────────┘
+           │
+           ▼
+  ┌─────────────────┐
+  │  5. Normalize   │  Map to canonical schema
+  │  & Store        │  Save to database with audit trail
+  └─────────────────┘
+```
+
+### Data Storage for Audit Trail
+
+All extracted data will be stored with full provenance:
+
+```sql
+-- Raw extraction audit table
+CREATE TABLE extraction_runs (
+    id SERIAL PRIMARY KEY,
+    business_id INTEGER REFERENCES businesses(id),
+    run_timestamp TIMESTAMP DEFAULT NOW(),
+    firecrawl_scrape_ids TEXT[],          -- Array of scrape IDs
+    pages_crawled TEXT[],                  -- URLs crawled
+    raw_markdown TEXT,                     -- Combined markdown content
+    raw_extraction JSONB,                  -- Raw LLM extraction output
+    normalized_data JSONB,                 -- Post-processed normalized data
+    credits_used INTEGER,
+    extraction_duration_ms INTEGER,
+    quality_score DECIMAL(5,2),
+    error_message TEXT
+);
+
+-- Track individual page captures
+CREATE TABLE page_captures (
+    id SERIAL PRIMARY KEY,
+    extraction_run_id INTEGER REFERENCES extraction_runs(id),
+    url VARCHAR(500) NOT NULL,
+    page_type VARCHAR(50),                 -- pricing, contact, faq, etc.
+    scrape_id VARCHAR(100),
+    markdown_content TEXT,
+    html_content TEXT,
+    metadata JSONB,
+    captured_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### Accuracy Validation
+
+To ensure extraction accuracy:
+
+1. **Manual spot-checks** - Randomly verify 10% of extractions against source
+2. **Price range validation** - Flag outliers (e.g., £5/night or £500/night)
+3. **Consistency checks** - Compare similar businesses in same region
+4. **Temporal tracking** - Detect and flag significant price changes
+5. **Source linking** - Every data point links back to source URL and capture timestamp
+
+---
+
 ## Next Steps: Expanded Sampling
 
 ### Objective
@@ -290,7 +449,7 @@ Sample more businesses across all 6 types to identify additional pricing variati
 
 1. **Breadth over depth** - 2-3 URLs per business type (12-18 total)
 2. **Complexity variety** - Include easy, medium, and hard complexity sites
-3. **Manual review option** - Use WebFetch for analysis without Firecrawl credits
+3. **Multi-page crawling** - Test full site extraction on subset first
 
 ### Expected Additional Variations to Discover
 
@@ -304,11 +463,12 @@ Sample more businesses across all 6 types to identify additional pricing variati
 
 ### Schema Evolution Plan
 
-1. Complete expanded sampling
+1. Complete expanded sampling across all business types
 2. Document all new variations discovered
 3. Update schema to accommodate edge cases
 4. Build extraction post-processor to normalize data
 5. Implement confidence scoring for ambiguous mappings
+6. Deploy database with full audit trail capability
 
 ---
 

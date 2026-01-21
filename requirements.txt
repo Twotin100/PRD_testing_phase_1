@@ -5,6 +5,12 @@ lxml>=5.0.0
 firecrawl-py>=1.0.0
 pydantic>=2.0.0
 
+# LLM for page classification (optional, falls back to rules if not installed)
+anthropic>=0.18.0
+
+# Environment management
+python-dotenv>=1.0.0
+
 # Data processing
 pandas>=2.0.0
 
